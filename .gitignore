@@ -1,0 +1,6 @@
+/target
+*.mzn
+*.fzn.json
+*.fzn
+*.pbp
+*.opb
