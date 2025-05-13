@@ -7,13 +7,19 @@ use std::{fs::OpenOptions, io::BufRead, io::Write, path::PathBuf};
 #[derive(Parser)]
 struct Cli {
     input_path: PathBuf,
+    #[arg(value_name = "FILE")]
+    output_path: Option<PathBuf>,
+    #[arg(short, long)]
+    eager_deletions: bool,
 }
 fn main() -> std::io::Result<()> {
     let args = Cli::parse();
 
-    let mut output_path = args.input_path.clone();
-    let _ = output_path.set_extension("smol.pbp");
-
+    let output_path = args.output_path.unwrap_or_else(|| {
+        let mut output_path = args.input_path.clone();
+        output_path.set_extension("smol.pbp");
+        output_path
+    });
     // Open input file and read from end
     let input_file = OpenOptions::new()
         .read(true)
@@ -34,7 +40,8 @@ fn main() -> std::io::Result<()> {
         }
     };
 
-    let mut marked = HashSet::new();
+    let mut marked_for_output = HashSet::new();
+    let mut marked_for_deletion = HashSet::new();
     let mut lines = rev_reader.lines();
 
     let mut current_line = lines.next().unwrap().unwrap();
@@ -58,7 +65,7 @@ fn main() -> std::io::Result<()> {
             .unwrap()
             .trim()
             .to_string();
-        marked.insert(contr_id);
+        marked_for_output.insert(contr_id);
 
         // Write output (hopefully NONE)
         current_line = lines.next().unwrap().unwrap();
@@ -69,7 +76,7 @@ fn main() -> std::io::Result<()> {
         assert!(current_line.starts_with("@"));
         writeln!(output_file, "{current_line}")?;
         let last_id = current_line.split(" ").nth(0).unwrap().trim().to_string();
-        marked.insert(last_id);
+        marked_for_output.insert(last_id);
     }
 
     let allowed_rules: [&str; 3] = ["a", "pol", "p"];
@@ -79,7 +86,7 @@ fn main() -> std::io::Result<()> {
         if current_line.starts_with("@") {
             let mut split_line = current_line.split(" ");
             let id = split_line.next().unwrap();
-            if marked.contains(id) {
+            if marked_for_output.contains(id) {
                 // We need to keep this constraint
                 let rule = split_line.next().unwrap();
                 assert!(allowed_rules.contains(&rule));
@@ -89,11 +96,13 @@ fn main() -> std::io::Result<()> {
                             continue;
                         } else {
                             assert!(term.starts_with("@"), "{term:?}");
-                            if !marked.contains(term) {
-                                // We haven't marked this yet, so it's the last time
-                                // this ID is needed in the proof, hence delete it
-                                let _ = writeln!(output_file, "del id {term} ;");
-                                marked.insert(term.to_string());
+                            if !marked_for_output.contains(term) {
+                                if args.eager_deletions || marked_for_deletion.contains(term) {
+                                    // We haven't marked this yet, so it's the last time
+                                    // this ID is needed in the proof, hence delete it
+                                    let _ = writeln!(output_file, "del id {term} ;");
+                                }
+                                marked_for_output.insert(term.to_string());
                             }
                         }
                     }
@@ -106,8 +115,17 @@ fn main() -> std::io::Result<()> {
             }
         } else if current_line.starts_with("f") || current_line.starts_with("pseudo-Boolean") {
             writeln!(output_file, "{current_line}")?;
+        } else if !args.eager_deletions && current_line.starts_with("del id") {
+            let mut id = current_line.split(" ").nth(2).unwrap();
+            id = if id.ends_with(";") {
+                &id[..id.len() - 2]
+            } else {
+                id
+            };
+            // We will delete this if anyone uses it
+            marked_for_deletion.insert(id.to_string());
         } else {
-            // Some other kind of rule/comment, ignore :D
+            // Something else ? Ignore ;-)
             continue;
         }
     }
