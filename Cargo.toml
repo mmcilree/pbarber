@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 rev_buf_reader = {version = "0.3.0"}
+thiserror = {version = "2.0"}
+colored = {version = "3.0"}
