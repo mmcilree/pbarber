@@ -1,3 +1,4 @@
+use clap::Args;
 use rev_buf_reader::RevBufReader;
 use std::fmt;
 use std::{
@@ -27,10 +28,24 @@ pub enum TrimmerError {
     MissingConclusion,
 }
 
-#[derive(Default)]
+#[derive(Default, Args)]
 pub struct TrimmerConfig {
+    #[arg(
+        short,
+        long,
+        help = "Add all possible deletions for logged constraints when trimming."
+    )]
     pub eager_deletion: bool,
+
+    #[arg(short, long, help = "Record and print trimming statistics.")]
     pub stats: bool,
+
+    #[arg(
+        short,
+        long,
+        help = "Add deletions for potential literal definitions at trimming phase."
+    )]
+    pub lit_deletion: bool,
 }
 
 #[derive(Default, Clone)]
@@ -42,11 +57,19 @@ pub struct ProofFileStats {
     pub a_lines_by_name: HashMap<String, u64>,
 }
 
+pub struct ProofFileStatsComparison<'a> {
+    current: &'a ProofFileStats,
+    reference: &'a ProofFileStats,
+}
+
 static ALLOWED_RULES: [&str; 3] = ["a", "pol", "p"];
+static FORWARD_LIT_DEF_PREFIX: &str = "lf";
+static REVERSE_LIT_DEF_PREFIX: &str = "lr";
 
 pub struct Trimmer<R, W> {
     marked_for_output: HashSet<String>,
     marked_for_deletion: HashSet<String>,
+    lits_seen: HashSet<String>,
     lines: Lines<RevBufReader<R>>,
     out: W,
     config: TrimmerConfig,
@@ -64,6 +87,7 @@ impl<R: Read + Seek, W: Write> Trimmer<R, W> {
         Self {
             marked_for_output: HashSet::<String>::new(),
             marked_for_deletion: HashSet::<String>::new(),
+            lits_seen: HashSet::<String>::new(),
             lines: rev_reader.lines(),
             out,
             config,
@@ -129,6 +153,26 @@ impl<R: Read + Seek, W: Write> Trimmer<R, W> {
                                     }
                                     self.marked_for_output.insert(term.to_string());
                                 }
+                            }
+                        }
+                    } else if self.config.lit_deletion && rule == "a" {
+                        let split_line = current_line.split(" ");
+                        for token in split_line {
+                            if token == ">=" {
+                                break;
+                            }
+                            let mut lit = token;
+
+                            if lit.starts_with("~") {
+                                lit = &lit[1..];
+                            }
+                            if !lit.starts_with("x") || self.lits_seen.contains(lit) {
+                                continue;
+                            }
+
+                            self.lits_seen.insert(lit.to_string());
+                            for prefix in [FORWARD_LIT_DEF_PREFIX, REVERSE_LIT_DEF_PREFIX] {
+                                self.write_line(&format!("del id @{}{}", prefix, &lit))?;
                             }
                         }
                     }
@@ -220,6 +264,13 @@ impl ProofFileStats {
             None => (),
         }
     }
+
+    pub fn compared_to<'a>(&'a self, other: &'a ProofFileStats) -> ProofFileStatsComparison<'a> {
+        ProofFileStatsComparison {
+            current: self,
+            reference: other,
+        }
+    }
 }
 
 impl fmt::Display for ProofFileStats {
@@ -232,6 +283,66 @@ impl fmt::Display for ProofFileStats {
         for (name, count) in &self.a_lines_by_name {
             writeln!(f, " ∟ `{}`: {}", name, count)?;
         }
+        Ok(())
+    }
+}
+
+impl fmt::Display for ProofFileStatsComparison<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let percent = |current, reference| {
+            if reference == 0 {
+                return "N/A".to_string();
+            }
+            let change = 100.0 * (current as f64 - reference as f64) / reference as f64;
+            if change == 0.0 {
+                format!("No change")
+            } else {
+                format!("{}{:.1}%", if change >= 0.0 { "+" } else { "" }, change)
+            }
+        };
+
+        writeln!(
+            f,
+            "Total lines: {} ({})",
+            self.current.total_lines,
+            percent(self.current.total_lines, self.reference.total_lines)
+        )?;
+        writeln!(
+            f,
+            "Assertion lines: {} ({})",
+            self.current.a_lines,
+            percent(self.current.a_lines, self.reference.a_lines)
+        )?;
+        writeln!(
+            f,
+            "Pol lines: {} ({})",
+            self.current.pol_lines,
+            percent(self.current.pol_lines, self.reference.pol_lines)
+        )?;
+        writeln!(
+            f,
+            "Del lines: {} ({})",
+            self.current.del_lines,
+            percent(self.current.del_lines, self.reference.del_lines)
+        )?;
+
+        writeln!(f, "Assertion lines by name:")?;
+        for (name, count) in &self.current.a_lines_by_name {
+            let ref_count = self
+                .reference
+                .a_lines_by_name
+                .get(name)
+                .copied()
+                .unwrap_or(0);
+            writeln!(
+                f,
+                " ∟ `{}`: {} ({})",
+                name,
+                count,
+                percent(*count, ref_count)
+            )?;
+        }
+
         Ok(())
     }
 }
