@@ -4,6 +4,7 @@ pub mod trimmer;
 use clap::Args;
 use std::fmt;
 use std::io::Write;
+use std::path::PathBuf;
 use std::{collections::HashMap, io};
 use thiserror::Error;
 
@@ -43,15 +44,42 @@ pub struct TrimmerConfig {
     #[arg(
         short,
         long,
-        help = "Add deletions for potential literal definitions at trimming phase."
+        help = "Add deletions for potential literal definitions at when trimming."
     )]
     pub lit_deletion: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, Args)]
 pub struct JustifierConfig {
+    #[arg(
+        long = "fzn",
+        value_name = "FZN_JSON",
+        help = "Path to FlatZinc file in the JSON format."
+    )]
+    fzn_path: PathBuf,
+
+    #[arg(
+        long = "lits",
+        value_name = "LITS_JSON",
+        help = "Literal mapping file in the JSON format."
+    )]
+    lits_path: PathBuf,
+
+    #[arg(
+        short,
+        long,
+        help = "Justify a file that is NOT in reverse (disabled if trimming)."
+    )]
     pub read_forwards: bool,
-    pub stats: bool,
+    #[arg(short, long, help = "Record and print justifier statistics.")]
+    pub justifier_stats: bool,
+    #[arg(
+        short,
+        long,
+        help = "Max number of lines to cache before being forced to expand an assertion.",
+        default_value_t = 10000
+    )]
+    pub max_line_cache: usize,
 }
 
 #[derive(Default, Clone)]
