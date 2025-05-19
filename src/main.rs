@@ -1,13 +1,13 @@
 use clap::{Args, Parser, Subcommand};
 use colored::Colorize;
-use pbarber::{ProofFileStats, Trimmer, TrimmerConfig, TrimmerError};
+use pbarber::{PBarberError, ProofFileStats, TrimmerConfig, trimmer::Trimmer};
 use rev_buf_reader::RevBufReader;
 use std::fs::{File, rename};
 use std::{fs::OpenOptions, io::BufRead, io::Write, path::PathBuf};
 
 #[derive(Parser)]
 #[command(
-    name = "pbarber",
+    name = "PBarber",
     about = "A tool for trimming and expanding ('styling') proof logs produced by a CP solver."
 )]
 struct Cli {
@@ -76,7 +76,7 @@ struct InputPathOnly {
     input_path: PathBuf,
 }
 
-fn main() -> Result<(), TrimmerError> {
+fn main() -> Result<(), PBarberError> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -108,12 +108,7 @@ fn main() -> Result<(), TrimmerError> {
             let (input_file, output_file) = open_files(&io.input_path, &output_path);
             println!("`style` not yet implemented. Trimming only...");
             let mut trimmer = Trimmer::with_config(input_file, output_file, trimmer_config);
-            let trim_result = trimmer.trim()?;
-            print_trim_result(
-                io.input_path.to_str().unwrap(),
-                output_path.to_str().unwrap(),
-                trim_result,
-            );
+            let _trim_result = trimmer.trim()?;
         }
         Commands::Style { io: _ } => {
             // let output_path = io.resolved_output_path();
@@ -133,7 +128,7 @@ fn main() -> Result<(), TrimmerError> {
     Ok(())
 }
 
-fn reverse_file(output_path: PathBuf) -> Result<(), TrimmerError> {
+fn reverse_file(output_path: PathBuf) -> Result<(), PBarberError> {
     let file_to_reverse = OpenOptions::new()
         .read(true)
         .open(&output_path)
