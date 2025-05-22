@@ -8,3 +8,11 @@ clap = { version = "4.0", features = ["derive"] }
 rev_buf_reader = {version = "0.3.0"}
 thiserror = {version = "2.0"}
 colored = {version = "3.0"}
+pboxide-parser = {path = "../pboxide/pboxide-parser"}
+pboxide-formula = {path = "../pboxide/pboxide-formula"}
+flatzinc-serde = "0.4"
+serde_json = "1.0"
+serde = {version = "1.0", features = ["derive"] }
+logos = "*"
+ustr = { version = "1.0", features = ["serde"] }
+rangelist = "0.2"

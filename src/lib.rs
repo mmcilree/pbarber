@@ -1,6 +1,6 @@
+pub(crate) mod cp_lit_map;
 pub mod justifier;
 pub mod trimmer;
-
 use clap::Args;
 use std::fmt;
 use std::io::Write;
@@ -27,6 +27,12 @@ pub enum PBarberError {
 
     #[error("Missing proof conclusion")]
     MissingConclusion,
+
+    #[error("Parse error: expected `{expected}`, got `{found}`")]
+    ParseError { expected: String, found: String },
+
+    #[error("Justification error: {0}")]
+    JustificationError(String),
 }
 
 #[derive(Default, Args)]

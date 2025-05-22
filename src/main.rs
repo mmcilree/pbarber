@@ -192,7 +192,7 @@ fn run_justifier(
     let file_to_style = OpenOptions::new()
         .read(true)
         .open(&output_path)
-        .expect("Failed to re-open output file for justifier.");
+        .expect("Failed to open input file for justifier.");
 
     let temp_path = output_path.with_extension("tmp");
     let output_file = OpenOptions::new()
