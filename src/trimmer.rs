@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    ALLOWED_RULES, FORWARD_LIT_DEF_PREFIX, PBarberError, ProofFileStats, ProofProcessor,
+    ALLOWED_RULES, FORWARD_LIT_DEF_PREFIX, PBarberError, ProofFileStats, ProofReader,
     REVERSE_LIT_DEF_PREFIX, TrimmerConfig,
 };
 
@@ -20,7 +20,7 @@ pub struct Trimmer<R: Read + Seek, W> {
     output_stats: ProofFileStats,
 }
 
-impl<R: Read + Seek, W: Write> ProofProcessor<W> for Trimmer<R, W> {
+impl<R: Read + Seek, W: Write> ProofReader<W> for Trimmer<R, W> {
     fn lines_next(&mut self) -> Option<Result<String, io::Error>> {
         self.lines.next()
     }

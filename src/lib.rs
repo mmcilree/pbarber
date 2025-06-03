@@ -33,6 +33,9 @@ pub enum PBarberError {
 
     #[error("Justification error: {0}")]
     JustificationError(String),
+
+    #[error("Justification error: {0}")]
+    LiteralLookupError(String),
 }
 
 #[derive(Default, Args)]
@@ -92,6 +95,7 @@ pub struct JustifierConfig {
 pub struct ProofFileStats {
     pub total_lines: u64,
     pub pol_lines: u64,
+    pub red_lines: u64,
     pub a_lines: u64,
     pub del_lines: u64,
     pub a_lines_by_name: HashMap<String, u64>,
@@ -102,7 +106,7 @@ pub struct ProofFileStatsComparison<'a> {
     reference: &'a ProofFileStats,
 }
 
-pub trait ProofProcessor<W: Write> {
+pub trait ProofReader<W: Write> {
     fn lines_next(&mut self) -> Option<Result<String, io::Error>>;
     fn has_stats(&self) -> bool;
     fn input_stats_mut(&mut self) -> &mut ProofFileStats;
@@ -152,6 +156,7 @@ impl ProofFileStats {
         }
         match rule {
             "a" => self.record_assertion(line),
+            "red" => self.red_lines += 1,
             "pol" | "p" => self.pol_lines += 1,
             "del" => self.del_lines += 1,
             _ => (),
@@ -186,6 +191,7 @@ impl fmt::Display for ProofFileStats {
         writeln!(f, "Total lines: {}", self.total_lines)?;
         writeln!(f, "Assertion lines: {}", self.a_lines)?;
         writeln!(f, "Pol lines: {}", self.pol_lines)?;
+        writeln!(f, "Red lines: {}", self.red_lines)?;
         writeln!(f, "Del lines: {}", self.del_lines)?;
         writeln!(f, "Assertion lines by name:")?;
         for (name, count) in &self.a_lines_by_name {
@@ -226,6 +232,12 @@ impl fmt::Display for ProofFileStatsComparison<'_> {
             "Pol lines: {} ({})",
             self.current.pol_lines,
             percent(self.current.pol_lines, self.reference.pol_lines)
+        )?;
+        writeln!(
+            f,
+            "Red lines: {} ({})",
+            self.current.red_lines,
+            percent(self.current.red_lines, self.reference.red_lines)
         )?;
         writeln!(
             f,

@@ -53,13 +53,13 @@ impl fmt::Display for CPOperator {
 pub(crate) enum CPLitData {
     #[serde(rename_all = "camelCase")]
     Condition {
-        cpvartype: CPVarType,
+        _cpvartype: CPVarType,
         name: String,
         operator: CPOperator,
         value: String,
     },
     #[serde(rename_all = "camelCase")]
-    Boolvar { cpvartype: CPVarType, name: String },
+    Boolvar { _cpvartype: CPVarType, name: String },
 }
 
 pub(crate) struct CPLitMap {
@@ -76,5 +76,14 @@ impl CPLitMap {
 
     pub fn get(&self, pb_var: &String) -> Option<CPLitData> {
         self.raw_map.get(pb_var).cloned()
+    }
+}
+
+impl CPLitData {
+    pub fn get_name(&self) -> String {
+        match self {
+            CPLitData::Condition { name, .. } => name.clone(),
+            CPLitData::Boolvar { name, .. } => name.split("=").next().unwrap().to_string(),
+        }
     }
 }
