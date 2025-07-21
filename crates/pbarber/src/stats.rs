@@ -1,96 +1,3 @@
-pub(crate) mod cp_lit_map;
-pub mod justifier;
-pub mod trimmer;
-use clap::Args;
-use std::fmt;
-use std::io::Write;
-use std::path::PathBuf;
-use std::{collections::HashMap, io};
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum PBarberError {
-    #[error("IO error: {0}")]
-    Io(#[from] io::Error),
-
-    #[error("Expected line to start with `{expected}`, got `{found}`")]
-    UnexpectedLineStart { expected: String, found: String },
-
-    #[error("Missing or malformed constraint ID in line: {0}")]
-    MalformedConstraintId(String),
-
-    #[error("Unknown rule encountered: {0}")]
-    UnknownRule(String),
-
-    #[error("Internal logic error: {0}")]
-    Internal(String),
-
-    #[error("Missing proof conclusion")]
-    MissingConclusion,
-
-    #[error("Parse error: expected `{expected}`, got `{found}`")]
-    ParseError { expected: String, found: String },
-
-    #[error("Justification error: {0}")]
-    JustificationError(String),
-
-    #[error("Justification error: {0}")]
-    LiteralLookupError(String),
-}
-
-#[derive(Default, Args)]
-pub struct TrimmerConfig {
-    #[arg(
-        short,
-        long,
-        help = "Add all possible deletions for logged constraints when trimming."
-    )]
-    pub eager_deletion: bool,
-
-    #[arg(short, long, help = "Record and print trimming statistics.")]
-    pub stats: bool,
-
-    #[arg(
-        short,
-        long,
-        help = "Add deletions for potential literal definitions at when trimming."
-    )]
-    pub lit_deletion: bool,
-}
-
-#[derive(Default, Args)]
-pub struct JustifierConfig {
-    #[arg(
-        long = "fzn",
-        value_name = "FZN_JSON",
-        help = "Path to FlatZinc file in the JSON format."
-    )]
-    fzn_path: PathBuf,
-
-    #[arg(
-        long = "lits",
-        value_name = "LITS_JSON",
-        help = "Literal mapping file in the JSON format."
-    )]
-    lits_path: PathBuf,
-
-    #[arg(
-        short,
-        long,
-        help = "Justify a file that is NOT in reverse (disabled if trimming)."
-    )]
-    pub read_forwards: bool,
-    #[arg(short, long, help = "Record and print justifier statistics.")]
-    pub justifier_stats: bool,
-    #[arg(
-        short,
-        long,
-        help = "Max number of lines to cache before being forced to expand an assertion.",
-        default_value_t = 10000
-    )]
-    pub max_line_cache: usize,
-}
-
 #[derive(Default, Clone)]
 pub struct ProofFileStats {
     pub total_lines: u64,
@@ -106,12 +13,12 @@ pub struct ProofFileStatsComparison<'a> {
     reference: &'a ProofFileStats,
 }
 
-pub trait ProofReader<W: Write> {
-    fn lines_next(&mut self) -> Option<Result<String, io::Error>>;
+pub trait ProofReader {
     fn has_stats(&self) -> bool;
+
     fn input_stats_mut(&mut self) -> &mut ProofFileStats;
-    fn output_stats_mut(&mut self) -> &mut ProofFileStats;
-    fn out_mut(&mut self) -> &mut W;
+
+    fn lines_next(&mut self) -> Option<Result<String, io::Error>>;
 
     fn next_line(&mut self) -> Option<Result<String, io::Error>> {
         let line = self.lines_next();
@@ -122,23 +29,6 @@ pub trait ProofReader<W: Write> {
             }
         }
         line
-    }
-
-    fn write_line(&mut self, content: &str) -> io::Result<()> {
-        if self.has_stats() {
-            self.output_stats_mut().record_line(&content);
-        }
-        writeln!(self.out_mut(), "{}", content)
-    }
-
-    fn assert_starts_with(&self, line: &String, pattern: &str) -> Result<(), PBarberError> {
-        if !line.starts_with(pattern) {
-            return Err(PBarberError::UnexpectedLineStart {
-                expected: pattern.into(),
-                found: line.clone(),
-            });
-        };
-        Ok(())
     }
 }
 

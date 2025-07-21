@@ -1,0 +1,7 @@
+[package]
+name = "pbarber-snipper"
+
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

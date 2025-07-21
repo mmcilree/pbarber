@@ -1,8 +1,10 @@
 /target
 /test
+/old
 *.mzn
 *.fzn.json
 *.fzn
 *.pbp
 *.opb
 *.DS_Store
+/.vscode
