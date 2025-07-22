@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/justifier", "crates/pbarber", "crates/reverser", "crates/snipper"]
+members = ["crates/justifier", "crates/pbarber", "crates/snipper"]
 
 [workspace.package]
 name = "pbarber"

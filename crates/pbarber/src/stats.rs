@@ -1,3 +1,5 @@
+use std::{collections::HashMap, fmt};
+
 #[derive(Default, Clone)]
 pub struct ProofFileStats {
     pub total_lines: u64,
@@ -18,9 +20,9 @@ pub trait ProofReader {
 
     fn input_stats_mut(&mut self) -> &mut ProofFileStats;
 
-    fn lines_next(&mut self) -> Option<Result<String, io::Error>>;
+    fn lines_next(&mut self) -> Option<Result<String, std::io::Error>>;
 
-    fn next_line(&mut self) -> Option<Result<String, io::Error>> {
+    fn next_line(&mut self) -> Option<Result<String, std::io::Error>> {
         let line = self.lines_next();
         if self.has_stats() {
             if let Some(line) = line.as_ref() {
@@ -31,10 +33,6 @@ pub trait ProofReader {
         line
     }
 }
-
-static ALLOWED_RULES: [&str; 3] = ["a", "pol", "p"];
-static FORWARD_LIT_DEF_PREFIX: &str = "lf";
-static REVERSE_LIT_DEF_PREFIX: &str = "lr";
 
 impl ProofFileStats {
     fn record_line(&mut self, line: &str) {
