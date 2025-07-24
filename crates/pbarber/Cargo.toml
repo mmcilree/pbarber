@@ -1,2 +1,9 @@
 [package]
-name = "pbarber"
+name = "pbarber-lib"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bimap = "0.6.3"
+flatzinc-serde = "0.4"
+ustr = { version = "1.0", features = ["serde"] }

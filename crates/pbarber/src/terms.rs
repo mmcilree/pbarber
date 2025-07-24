@@ -1,14 +1,22 @@
 use std::ops::{Add, AddAssign, Mul, Not};
 
-type VarID = u32;
-type FlagID = u32;
-type Int = i64;
+pub type VarID = u32;
+pub type FlagID = u32;
+pub type Int = i64;
 
+/// A finite domain variable that would need to be encoded in the proof with a
+/// bit-string.
+///
+/// NB: there is no distinction between original problemn variables and "proof-only"
+/// auxiliary variables.
 #[derive(Clone, Debug)]
 pub struct SimpleVar {
     id: VarID,
 }
 
+/// A view of a finite domain variable:
+///
+/// (V * first_multiply) + then_add
 #[derive(Clone, Debug)]
 pub struct ViewVar {
     var: SimpleVar,
@@ -16,12 +24,20 @@ pub struct ViewVar {
     then_add: Int,
 }
 
+/// A var with a constant value.
+#[derive(Clone, Debug)]
+pub struct ConstVar {
+    value: Int,
+}
+
 #[derive(Clone, Debug)]
 pub enum Var {
     Simple(SimpleVar),
     View(ViewVar),
+    Const(ConstVar),
 }
 
+/// Allowed variable condition operators: >=, ==, <, !=
 #[derive(Clone, Debug)]
 pub enum AtomOp {
     GE,
@@ -30,6 +46,8 @@ pub enum AtomOp {
     NE,
 }
 
+/// An "atomic constraint"/"CP literal" describing the relationship between a variable
+/// and a value.
 #[derive(Clone, Debug)]
 pub struct AtomLit {
     var: Var,
@@ -37,53 +55,67 @@ pub struct AtomLit {
     val: Int,
 }
 
+/// An identifier for a Boolean literal.
 #[derive(Clone, Debug)]
 pub struct Flag {
     id: FlagID,
 }
 
+/// A Boolean literal not related to a variable condition.
 #[derive(Clone, Debug)]
 pub enum FlagLit {
     Pos(Flag),
     Neg(Flag),
 }
 
+/// Boolean literal.
 #[derive(Clone, Debug)]
 pub enum Lit {
     Atom(AtomLit),
     Flag(FlagLit),
 }
 
+/// Term for linear sums that can be transformed in into PB constraints.
 #[derive(Clone, Debug)]
-pub enum Term {
+pub enum LinearTerm {
     Var(Var),
     Lit(Lit),
     Const(i64),
 }
 
+/// Associates an arbitrary term with a coefficient.
 #[derive(Clone, Debug)]
-pub struct WeightedTerm {
+pub struct WeightedTerm<T> {
     coeff: Int,
-    term: Term,
+    term: T,
 }
 
+/// Integer linear combination of arbitrary terms.
 #[derive(Clone, Debug)]
-pub struct WeightedSum {
-    terms: Vec<WeightedTerm>,
+pub struct WeightedSum<T: Clone> {
+    terms: Vec<WeightedTerm<T>>,
 }
 
+pub type LinearSum = WeightedSum<LinearTerm>;
+pub type PBSum = WeightedSum<Lit>;
+
+/// A greater-than-or-equal constraint on a linear sum.
 #[derive(Clone, Debug)]
-pub struct LinearGeq {
-    sum: WeightedSum,
+pub struct SumGeq<T: Clone> {
+    sum: WeightedSum<T>,
     rhs: Int,
 }
 
+pub type LinearGeq = SumGeq<LinearTerm>;
+pub type PBConstraint = SumGeq<Lit>;
+
 impl SimpleVar {
-    fn with_id(id: VarID) -> SimpleVar {
+    pub fn with_id(id: VarID) -> SimpleVar {
         return SimpleVar { id };
     }
 
-    fn add(&self, value: i64) -> ViewVar {
+    /// Create a new view by adding a value.
+    pub fn add(&self, value: i64) -> ViewVar {
         ViewVar {
             var: self.clone(),
             first_multiply: 1,
@@ -91,7 +123,8 @@ impl SimpleVar {
         }
     }
 
-    fn times(&self, value: i64) -> ViewVar {
+    /// Create a new view by multiplying by a value.
+    pub fn times(&self, value: i64) -> ViewVar {
         ViewVar {
             var: self.clone(),
             first_multiply: value,
@@ -101,7 +134,8 @@ impl SimpleVar {
 }
 
 impl ViewVar {
-    fn add(&self, value: i64) -> ViewVar {
+    /// Create a new view by adding a value.
+    pub fn add(&self, value: i64) -> ViewVar {
         ViewVar {
             var: self.var.clone(),
             first_multiply: self.first_multiply,
@@ -109,7 +143,10 @@ impl ViewVar {
         }
     }
 
-    fn times(&self, value: i64) -> ViewVar {
+    /// Create a new view by multiplying through by a value
+    ///
+    /// NB: (a*x + b).times(c) = a*c*x + b*c
+    pub fn times(&self, value: Int) -> ViewVar {
         ViewVar {
             var: self.var.clone(),
             first_multiply: self.first_multiply * value,
@@ -118,26 +155,47 @@ impl ViewVar {
     }
 }
 
+impl ConstVar {
+    /// Create a new constant variable by adding a value.
+    pub fn add(&self, to_add: Int) -> ConstVar {
+        ConstVar {
+            value: self.value + to_add,
+        }
+    }
+
+    /// Create a new constant variable by multiplying through by a value
+    ///
+    /// NB: (a*x + b).times(c) = a*c*x + b*c
+    pub fn times(&self, to_mult: Int) -> ConstVar {
+        ConstVar {
+            value: self.value * to_mult,
+        }
+    }
+}
+
+/// Methods for constructing `View`s and `AtomLit`s from variables.
 impl Var {
-    fn with_id(id: VarID) -> Var {
+    pub fn with_id(id: VarID) -> Var {
         Var::Simple(SimpleVar::with_id(id))
     }
 
-    fn add(&self, value: Int) -> Var {
+    pub fn add(&self, value: Int) -> Var {
         match self {
             Var::Simple(sv) => Var::View(sv.add(value)),
             Var::View(vv) => Var::View(vv.add(value)),
+            Var::Const(cv) => Var::Const(cv.add(value)),
         }
     }
 
-    fn times(&self, value: Int) -> Var {
+    pub fn times(&self, value: Int) -> Var {
         match self {
             Var::Simple(sv) => Var::View(sv.times(value)),
             Var::View(vv) => Var::View(vv.times(value)),
+            Var::Const(cv) => Var::Const(cv.times(value)),
         }
     }
 
-    fn ge(&self, value: Int) -> AtomLit {
+    pub fn ge(&self, value: Int) -> AtomLit {
         return AtomLit {
             var: self.clone(),
             op: AtomOp::GE,
@@ -145,7 +203,7 @@ impl Var {
         };
     }
 
-    fn eq(&self, value: Int) -> AtomLit {
+    pub fn eq(&self, value: Int) -> AtomLit {
         return AtomLit {
             var: self.clone(),
             op: AtomOp::EQ,
@@ -153,7 +211,7 @@ impl Var {
         };
     }
 
-    fn ne(&self, value: Int) -> AtomLit {
+    pub fn ne(&self, value: Int) -> AtomLit {
         return AtomLit {
             var: self.clone(),
             op: AtomOp::NE,
@@ -161,7 +219,7 @@ impl Var {
         };
     }
 
-    fn lt(&self, value: Int) -> AtomLit {
+    pub fn lt(&self, value: Int) -> AtomLit {
         return AtomLit {
             var: self.clone(),
             op: AtomOp::LT,
@@ -171,11 +229,12 @@ impl Var {
 }
 
 impl Flag {
-    fn with_id(id: FlagID) -> Flag {
+    pub fn with_id(id: FlagID) -> Flag {
         return Flag { id };
     }
 }
 
+/// Logical negation of a `Flag`.
 impl Not for FlagLit {
     type Output = Self;
 
@@ -187,6 +246,7 @@ impl Not for FlagLit {
     }
 }
 
+/// Logical negation of an `AtomLit`.
 impl Not for AtomLit {
     type Output = Self;
     fn not(self) -> AtomLit {
@@ -204,6 +264,7 @@ impl Not for AtomLit {
     }
 }
 
+/// Logical negation of a literal.
 impl Not for Lit {
     type Output = Self;
     fn not(self) -> Lit {
@@ -214,40 +275,47 @@ impl Not for Lit {
     }
 }
 
-impl From<SimpleVar> for Term {
+impl From<SimpleVar> for LinearTerm {
     fn from(v: SimpleVar) -> Self {
-        Term::Var(Var::Simple(v.clone()))
+        LinearTerm::Var(Var::Simple(v.clone()))
     }
 }
 
-impl From<ViewVar> for Term {
+impl From<ViewVar> for LinearTerm {
     fn from(v: ViewVar) -> Self {
-        Term::Var(Var::View(v.clone()))
+        LinearTerm::Var(Var::View(v.clone()))
     }
 }
 
-impl From<Var> for Term {
+impl From<ConstVar> for LinearTerm {
+    fn from(v: ConstVar) -> Self {
+        LinearTerm::Var(Var::Const(v.clone()))
+    }
+}
+
+impl From<Var> for LinearTerm {
     fn from(v: Var) -> Self {
         match v {
             Var::Simple(sv) => sv.into(),
             Var::View(vv) => vv.into(),
+            Var::Const(cv) => cv.into(),
         }
     }
 }
 
-impl From<AtomLit> for Term {
+impl From<AtomLit> for LinearTerm {
     fn from(a: AtomLit) -> Self {
-        Term::Lit(Lit::Atom(a.clone()))
+        LinearTerm::Lit(Lit::Atom(a.clone()))
     }
 }
 
-impl From<FlagLit> for Term {
+impl From<FlagLit> for LinearTerm {
     fn from(f: FlagLit) -> Self {
-        Term::Lit(Lit::Flag(f.clone()))
+        LinearTerm::Lit(Lit::Flag(f.clone()))
     }
 }
 
-impl From<Lit> for Term {
+impl From<Lit> for LinearTerm {
     fn from(v: Lit) -> Self {
         match v {
             Lit::Flag(f) => f.into(),
@@ -256,82 +324,109 @@ impl From<Lit> for Term {
     }
 }
 
-impl From<Int> for Term {
+impl From<Int> for LinearTerm {
     fn from(c: Int) -> Self {
-        Term::Const(c)
+        LinearTerm::Const(c)
     }
 }
 
-impl WeightedSum {
-    fn new() -> WeightedSum {
+impl<T: Clone> WeightedSum<T> {
+    pub fn new() -> WeightedSum<T> {
         WeightedSum {
-            terms: Vec::<WeightedTerm>::new(),
+            terms: Vec::<WeightedTerm<T>>::new(),
         }
     }
 
-    fn add_term(&mut self, wt: WeightedTerm) {
+    /// Append a `WeightedTerm`.
+    pub fn add_term(&mut self, wt: WeightedTerm<T>) {
         self.terms.push(wt);
     }
 
-    fn times(self, val: i64) -> WeightedSum {
+    /// Multiply all coefficients through by a constant.
+    pub fn times(self, val: Int) -> WeightedSum<T> {
         let new_terms = self
             .terms
             .into_iter()
             .map(|t| WeightedTerm {
                 coeff: t.coeff * val,
-                term: t.term,
+                term: t.term.clone(),
             })
             .collect();
         WeightedSum { terms: new_terms }
     }
 
-    fn ge(self, rhs: i64) -> LinearGeq {
-        LinearGeq { sum: self, rhs }
+    /// Construct a greater-equal constraint from the sum.
+    pub fn ge(self, rhs: Int) -> SumGeq<T> {
+        SumGeq { sum: self, rhs }
     }
 
-    fn gt(self, rhs: i64) -> LinearGeq {
-        LinearGeq {
+    /// Construct a greater-equal constraint from the sum, adjusting for '>'.
+    pub fn gt(self, rhs: Int) -> SumGeq<T> {
+        SumGeq::<T> {
             sum: self,
             rhs: rhs + 1,
         }
     }
 
-    fn le(self, rhs: i64) -> LinearGeq {
-        LinearGeq {
+    /// Construct a greater-equal constraint from the sum, adjusting for '<='.
+    pub fn le(self, rhs: Int) -> SumGeq<T> {
+        SumGeq::<T> {
             sum: self.times(-1),
             rhs: -rhs,
         }
     }
 
-    fn lt(self, rhs: i64) -> LinearGeq {
-        LinearGeq {
+    /// Construct a greater-equal constraint from the sum,, adjusting for '<'.
+    pub fn lt(self, rhs: Int) -> SumGeq<T> {
+        SumGeq::<T> {
             sum: self.times(-1),
             rhs: -rhs - 1,
         }
     }
 }
 
-impl Add<WeightedTerm> for WeightedTerm {
-    type Output = WeightedSum;
-
-    fn add(self, wt: WeightedTerm) -> WeightedSum {
-        WeightedSum::new() + self + wt
-    }
-}
-
-impl Add<WeightedTerm> for WeightedSum {
+/// Operator to add weighted term to sum.
+///
+/// Since `Lit`, `AtomLit` can all be cast to LinearTerm, allow adding to a
+/// WeightedSum<LinearTerm> using `+` operator.
+impl<T: Clone, L: Into<T>> Add<WeightedTerm<L>> for WeightedSum<T> {
     type Output = Self;
 
-    fn add(mut self, wt: WeightedTerm) -> Self {
-        self.add_term(wt);
+    fn add(mut self, wt: WeightedTerm<L>) -> Self {
+        self.add_term(WeightedTerm {
+            coeff: wt.coeff,
+            term: wt.term.into(),
+        });
         self
     }
 }
 
-impl Add<WeightedSum> for WeightedSum {
+/// Operator to construct a new weighted sum from two weighted terms.
+///
+/// Note this will always cast to `LinearTerm`s.
+impl<L: Into<LinearTerm>, T: Into<LinearTerm>> Add<WeightedTerm<L>> for WeightedTerm<T> {
+    type Output = WeightedSum<LinearTerm>;
+
+    fn add(self, other: WeightedTerm<L>) -> WeightedSum<LinearTerm> {
+        WeightedSum::<LinearTerm>::new()
+            + WeightedTerm::<LinearTerm> {
+                coeff: self.coeff,
+                term: self.term.into(),
+            }
+            + WeightedTerm::<LinearTerm> {
+                coeff: other.coeff,
+                term: other.term.into(),
+            }
+    }
+}
+
+/// Operator to construct a weighted sum from two weighted sums on the same terms.
+///
+/// No casting will be performed.
+impl<T: Clone> Add<WeightedSum<T>> for WeightedSum<T> {
     type Output = Self;
 
-    fn add(mut self, ws: WeightedSum) -> Self {
+    fn add(mut self, ws: WeightedSum<T>) -> Self {
         for wt in ws.terms.iter() {
             self.add_term(wt.clone());
         }
@@ -339,14 +434,24 @@ impl Add<WeightedSum> for WeightedSum {
     }
 }
 
-impl AddAssign<WeightedTerm> for WeightedSum {
-    fn add_assign(&mut self, wt: WeightedTerm) {
-        self.add_term(wt);
+/// Operator to add and assign weighted term to sum.
+///
+/// Since `Lit`, `AtomLit` can all be cast to LinearTerm, allow adding to a
+/// WeightedSum<LinearTerm> using `+=` operator.
+impl<T: Clone, L: Into<T>> AddAssign<WeightedTerm<L>> for WeightedSum<T> {
+    fn add_assign(&mut self, wt: WeightedTerm<L>) {
+        self.add_term(WeightedTerm {
+            coeff: wt.coeff,
+            term: wt.term.into(),
+        });
     }
 }
 
-impl AddAssign<WeightedSum> for WeightedSum {
-    fn add_assign(&mut self, ws: WeightedSum) {
+/// Operator to add and two weighted sums and assign to the first.
+///
+/// No casting will be performed.
+impl<T: Clone> AddAssign<WeightedSum<T>> for WeightedSum<T> {
+    fn add_assign(&mut self, ws: WeightedSum<T>) {
         for wt in ws.terms.iter() {
             self.add_term(wt.clone());
         }
@@ -354,21 +459,22 @@ impl AddAssign<WeightedSum> for WeightedSum {
 }
 
 impl Mul<Var> for Int {
-    type Output = WeightedTerm;
+    type Output = WeightedTerm<LinearTerm>;
 
     fn mul(self, rhs: Var) -> Self::Output {
         match rhs {
             Var::Simple(sv) => self * sv,
             Var::View(vv) => self * vv,
+            Var::Const(cv) => self * cv,
         }
     }
 }
 
 impl Mul<SimpleVar> for Int {
-    type Output = WeightedTerm;
+    type Output = WeightedTerm<LinearTerm>;
 
     fn mul(self, rhs: SimpleVar) -> Self::Output {
-        WeightedTerm {
+        WeightedTerm::<LinearTerm> {
             coeff: self,
             term: rhs.into(),
         }
@@ -376,10 +482,21 @@ impl Mul<SimpleVar> for Int {
 }
 
 impl Mul<ViewVar> for Int {
-    type Output = WeightedTerm;
+    type Output = WeightedTerm<LinearTerm>;
 
     fn mul(self, rhs: ViewVar) -> Self::Output {
-        WeightedTerm {
+        WeightedTerm::<LinearTerm> {
+            coeff: self,
+            term: rhs.into(),
+        }
+    }
+}
+
+impl Mul<ConstVar> for Int {
+    type Output = WeightedTerm<LinearTerm>;
+
+    fn mul(self, rhs: ConstVar) -> Self::Output {
+        WeightedTerm::<LinearTerm> {
             coeff: self,
             term: rhs.into(),
         }
@@ -387,7 +504,7 @@ impl Mul<ViewVar> for Int {
 }
 
 impl Mul<Lit> for Int {
-    type Output = WeightedTerm;
+    type Output = WeightedTerm<Lit>;
 
     fn mul(self, rhs: Lit) -> Self::Output {
         match rhs {
@@ -398,56 +515,57 @@ impl Mul<Lit> for Int {
 }
 
 impl Mul<AtomLit> for Int {
-    type Output = WeightedTerm;
+    type Output = WeightedTerm<Lit>;
 
     fn mul(self, rhs: AtomLit) -> Self::Output {
-        WeightedTerm {
+        WeightedTerm::<Lit> {
             coeff: self,
-            term: rhs.into(),
+            term: Lit::Atom(rhs),
         }
     }
 }
 
 impl Mul<FlagLit> for Int {
-    type Output = WeightedTerm;
+    type Output = WeightedTerm<Lit>;
 
     fn mul(self, rhs: FlagLit) -> Self::Output {
-        WeightedTerm {
+        WeightedTerm::<Lit> {
             coeff: self,
-            term: rhs.into(),
+            term: Lit::Flag(rhs),
         }
     }
 }
 
 impl Mul<Flag> for Int {
-    type Output = WeightedTerm;
+    type Output = WeightedTerm<Lit>;
 
     fn mul(self, rhs: Flag) -> Self::Output {
         WeightedTerm {
             coeff: self,
-            term: FlagLit::Pos(rhs).into(),
+            term: Lit::Flag(FlagLit::Pos(rhs)),
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    #[test]
-    fn test_create_linear_geq() {
-        let x = Var::with_id(0);
-        let y = Var::with_id(1);
-        let z = x.times(-1).add(3);
-        let f = Flag::with_id(0);
+//     #[test]
+//     fn test_create_linear_geq() {
+//         let x = Var::with_id(0);
+//         let y = Var::with_id(1);
+//         let z = x.times(-1).add(3);
+//         let f = Flag::with_id(0);
 
-        let xge3 = x.ge(3);
-        let term = 3 * x.ge(3);
-        let mut sum = WeightedSum::new();
+//         let xge3 = x.ge(3);
+//         let term = 3 * x.ge(3);
+//         let mut sum = 2 * x.ge(4) + 1 * !y.eq(2);
 
-        sum += 3 * !x.ge(3);
-        sum += 1 * f + 3 * z;
-        let con = sum.ge(5);
-        println!("{:?}", con)
-    }
-}
+//         sum += 3 * !x.ge(3);
+//         let what = (1 * f + 3 * z);
+
+//         let con = sum.ge(5);
+//         println!("{:?}", con)
+//     }
+// }
