@@ -8,6 +8,9 @@ use flatzinc_serde::FlatZinc;
 use rustc_hash::FxHashSet as HashSet; // Supposedly fast, might want to experiment.
 use ustr::Ustr;
 
+/// Store all the relevant data about variables in one place. Design decision was to
+/// do this (as is often done in CP solvers) rather than keep all this info with each
+/// Var struct. Hopefully it pays off efficiency-wise.
 #[derive(Debug)]
 pub struct VarTracker {
     next_var_id: VarID,
@@ -60,6 +63,10 @@ impl VarTracker {
             })?;
 
         Ok(var_tracker)
+    }
+
+    pub fn get_by_name(&self, name: &Ustr) -> Option<&Var> {
+        self.var_names.get_by_right(name)
     }
 }
 

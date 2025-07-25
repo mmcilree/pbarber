@@ -50,6 +50,7 @@ pub struct ConstVar {
     value: Int,
 }
 
+/// General finite domain variables.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Var {
     Simple(SimpleVar),
@@ -189,6 +190,14 @@ impl ConstVar {
     pub fn times(&self, to_mult: Int) -> ConstVar {
         ConstVar {
             value: self.value * to_mult,
+        }
+    }
+}
+
+impl<T: Into<Int>> From<T> for ConstVar {
+    fn from(value: T) -> Self {
+        Self {
+            value: value.into(),
         }
     }
 }

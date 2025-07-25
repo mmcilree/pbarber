@@ -24,6 +24,9 @@ pub enum PBarberError {
     #[error("Unexpected error: `{0}`.")]
     Unexpected(String),
 
+    #[error("FlatZinc read error: expected `{expected}`, got `{found}`")]
+    FlatZinc { expected: String, found: String },
+
     #[error("Parse error: expected `{expected}`, got `{found}`")]
     Parse { expected: String, found: String },
 }

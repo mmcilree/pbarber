@@ -2,11 +2,11 @@
 //! make it simpler to write redundance, pbc, ia rules without complicated string
 //! formatting.
 //!
-//! [`ConstraintStatement`] represents a proof step that
-//! explicitly derives a constraint using a VeriPB proof rule, and can be constructed
-//! via `ConstraintStatement::new(rule, constraint)` or one of
-//! the provided macros like [`rup!`] or [`ia!`]; and then added to with builder
-//! functions like `with_antecedents()` `with_hints()`.
+//! [`ConstraintStatement`] represents a proof step that explicitly derives a constraint
+//! using a VeriPB proof rule, and can be constructed via
+//! `ConstraintStatement::new(rule, constraint)` or one of the provided macros like
+//! [`rup!`] or [`ia!`]; and then added to with builder functions like
+//! `with_antecedents()` `with_hints()`.
 //!
 //! Additionally it defines types and helpers for constructing cutting planes
 //! steps [`PolStatement`], and for labeling, substitution,
