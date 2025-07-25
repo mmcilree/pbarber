@@ -1,6 +1,26 @@
+//! Module for creating terms, sums of terms and constraints on those terms, with
+//! lots of syntactic sugar.
+//!
+//! Best understood by example:
+//!
+//! ```rust
+//!     let x = Var::with_id(0);
+//!     let y = Var::with_id(1);
+//!     let z = x.times(-1).add(3);
+//!     let f = Flag::with_id(0);
+//!     let xge3 = x.ge(3);
+//!     let term = 3 * x.ge(3);
+//!     let mut sum = 2 * x.ge(4) + 1 * !y.eq(2);
+//!     sum += 3 * !x.ge(3);
+//!     let what = (1 * f + 3 * z);
+//!     let con = sum.ge(5);
+//!     println!("{:?}", con)
+//! ```
 use std::ops::{Add, AddAssign, Mul, Not};
 
-pub type VarID = u32;
+use crate::statements::{Direction, Label, PolTerm, PolToken};
+
+pub type VarID = usize;
 pub type FlagID = u32;
 pub type Int = i64;
 
@@ -9,7 +29,7 @@ pub type Int = i64;
 ///
 /// NB: there is no distinction between original problemn variables and "proof-only"
 /// auxiliary variables.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SimpleVar {
     id: VarID,
 }
@@ -17,7 +37,7 @@ pub struct SimpleVar {
 /// A view of a finite domain variable:
 ///
 /// (V * first_multiply) + then_add
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ViewVar {
     var: SimpleVar,
     first_multiply: Int,
@@ -25,12 +45,12 @@ pub struct ViewVar {
 }
 
 /// A var with a constant value.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ConstVar {
     value: Int,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Var {
     Simple(SimpleVar),
     View(ViewVar),
@@ -38,7 +58,7 @@ pub enum Var {
 }
 
 /// Allowed variable condition operators: >=, ==, <, !=
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum AtomOp {
     GE,
     EQ,
@@ -48,7 +68,7 @@ pub enum AtomOp {
 
 /// An "atomic constraint"/"CP literal" describing the relationship between a variable
 /// and a value.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct AtomLit {
     var: Var,
     op: AtomOp,
@@ -56,27 +76,27 @@ pub struct AtomLit {
 }
 
 /// An identifier for a Boolean literal.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Flag {
     id: FlagID,
 }
 
 /// A Boolean literal not related to a variable condition.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FlagLit {
     Pos(Flag),
     Neg(Flag),
 }
 
 /// Boolean literal.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Lit {
     Atom(AtomLit),
     Flag(FlagLit),
 }
 
 /// Term for linear sums that can be transformed in into PB constraints.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LinearTerm {
     Var(Var),
     Lit(Lit),
@@ -86,14 +106,14 @@ pub enum LinearTerm {
 /// Associates an arbitrary term with a coefficient.
 #[derive(Clone, Debug)]
 pub struct WeightedTerm<T> {
-    coeff: Int,
-    term: T,
+    pub coeff: Int,
+    pub term: T,
 }
 
 /// Integer linear combination of arbitrary terms.
 #[derive(Clone, Debug)]
 pub struct WeightedSum<T: Clone> {
-    terms: Vec<WeightedTerm<T>>,
+    pub terms: Vec<WeightedTerm<T>>,
 }
 
 pub type LinearSum = WeightedSum<LinearTerm>;
@@ -246,6 +266,12 @@ impl Not for FlagLit {
     }
 }
 
+impl FlagLit {
+    pub fn def_label(&self) -> Label {
+        Label::LitDef(Lit::Flag(self.clone()), Direction::IMPLIES)
+    }
+}
+
 /// Logical negation of an `AtomLit`.
 impl Not for AtomLit {
     type Output = Self;
@@ -264,6 +290,12 @@ impl Not for AtomLit {
     }
 }
 
+impl AtomLit {
+    pub fn def_label(&self) -> Label {
+        Label::LitDef(Lit::Atom(self.clone()), Direction::IMPLIES)
+    }
+}
+
 /// Logical negation of a literal.
 impl Not for Lit {
     type Output = Self;
@@ -271,6 +303,22 @@ impl Not for Lit {
         match self {
             Lit::Atom(atom_lit) => Lit::Atom(atom_lit.not()),
             Lit::Flag(flag_lit) => Lit::Flag(flag_lit.not()),
+        }
+    }
+}
+
+impl PolTerm for Lit {}
+impl Into<PolToken> for Lit {
+    fn into(self) -> PolToken {
+        PolToken::Lit(self)
+    }
+}
+
+impl Lit {
+    pub fn def_label(&self) -> Label {
+        match self {
+            Lit::Atom(atom_lit) => atom_lit.def_label(),
+            Lit::Flag(flag_lit) => flag_lit.def_label(),
         }
     }
 }
